@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Self-Updating POC</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    textarea { width: 100%; height: 100px; }
+    input, button { margin-top: 1em; display: block; }
+  </style>
+</head>
+<body>
+  <h1>Self-Updating Web App</h1>
+
+  <label>GitHub Token:
+    <input type="password" id="token" placeholder="Paste your GitHub token here"/>
+  </label>
+
+  <div id="editor" style="display:none;">
+    <label>Title:
+      <input type="text" id="title"/>
+    </label>
+    <label>Body:
+      <textarea id="body"></textarea>
+    </label>
+    <button id="save">Save to GitHub</button>
+  </div>
+
+  <script>
+    // Configuration — change these to your repo
+    const owner = 'juhannuspukki';
+    const repo = 'skynet';
+    const filePath = 'content.json';
+    const branch = 'main';
+
+    let sha = ''; // To store current file SHA for updates
+
+    async function fetchContent(token) {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, {
+        headers: { Authorization: `token ${token}` }
+      });
+      if (!res.ok) {
+        alert('Failed to fetch content: ' + res.statusText);
+        return;
+      }
+      const data = await res.json();
+      const content = JSON.parse(atob(data.content));
+      sha = data.sha;
+
+      document.getElementById('title').value = content.title;
+      document.getElementById('body').value = content.body;
+      document.getElementById('editor').style.display = 'block';
+    }
+
+    async function saveContent(token) {
+      const updatedContent = {
+        title: document.getElementById('title').value,
+        body: document.getElementById('body').value
+      };
+
+      const encoded = btoa(JSON.stringify(updatedContent, null, 2));
+
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: 'Update content.json via web app',
+          content: encoded,
+          sha: sha,
+          branch: branch
+        })
+      });
+
+      if (res.ok) {
+        alert('Content saved to GitHub!');
+        location.reload();
+      } else {
+        const error = await res.json();
+        alert('Error saving content: ' + error.message);
+      }
+    }
+
+    document.getElementById('token').addEventListener('change', (e) => {
+      const token = e.target.value.trim();
+      if (token) fetchContent(token);
+      document.getElementById('save').addEventListener('click', () => saveContent(token));
+    });
+  </script>
+</body>
+</html>
